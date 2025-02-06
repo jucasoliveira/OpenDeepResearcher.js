@@ -24,10 +24,7 @@ Follow these steps to set up the project.
 
 ---
 
-### ontributing Guide
-
-````markdown
-# Contributing Guide
+### Contributing Guide
 
 We welcome contributions to the **Automode Research Agent** project! Here’s how you can contribute:
 
@@ -42,4 +39,3 @@ Create a new branch for your feature or bug fix:
 ```bash
 git checkout -b feature-name
 ```
-````
