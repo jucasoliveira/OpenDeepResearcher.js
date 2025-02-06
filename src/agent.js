@@ -1,6 +1,5 @@
 const { OpenAI } = require("@langchain/openai");
 const { initializeAgentExecutorWithOptions } = require("langchain/agents");
-const { CheerioWebBaseLoader } = require("langchain/document_loaders/web/cheerio");
 const { WebBrowser } = require("langchain/tools/webbrowser");
 
 class ResearchAgent {
