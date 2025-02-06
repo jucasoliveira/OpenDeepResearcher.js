@@ -11,11 +11,16 @@
             margin: 0 auto;
             padding: 20px;
             line-height: 1.6;
+            background-color: #f5f5f5;
         }
         .container {
             display: flex;
             flex-direction: column;
             gap: 20px;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .input-group {
             display: flex;
@@ -23,36 +28,169 @@
         }
         #query {
             flex-grow: 1;
-            padding: 10px;
+            padding: 12px;
             font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            transition: border-color 0.3s;
+        }
+        #query:focus {
+            border-color: #007bff;
+            outline: none;
         }
         button {
-            padding: 10px 20px;
+            padding: 12px 24px;
             background-color: #007bff;
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
         }
         button:disabled {
             background-color: #ccc;
+        }
+        .process-steps {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .step {
+            text-align: center;
+            padding: 10px;
+            border-radius: 4px;
+            min-width: 100px;
+        }
+        .step.active {
+            background-color: #007bff;
+            color: white;
+        }
+        .step.completed {
+            background-color: #28a745;
+            color: white;
         }
         .output-section {
             border: 1px solid #ddd;
             padding: 20px;
             border-radius: 4px;
             margin-top: 20px;
+            background-color: white;
+        }
+        .output-container {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            background-color: #fff;
+        }
+        .output-container h2 {
+            margin-top: 0;
+            color: #007bff;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 8px;
         }
         .status {
             color: #666;
             font-style: italic;
+            text-align: center;
+            padding: 10px;
+            background-color: #e9ecef;
+            border-radius: 4px;
         }
         .error {
             color: #dc3545;
             background-color: #f8d7da;
-            padding: 10px;
+            padding: 15px;
             border-radius: 4px;
             margin-top: 10px;
+            border: 1px solid #f5c6cb;
+        }
+        .composing-content {
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .typing-indicator {
+            display: inline-block;
+            margin-left: 5px;
+        }
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #007bff;
+            border-radius: 50%;
+            margin: 0 2px;
+            animation: typing 1s infinite;
+        }
+        @keyframes typing {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        .process-log {
+            background: #1e1e1e;
+            color: #fff;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            margin: 10px 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid transparent;
+        }
+        
+        .log-entry.info {
+            color: #7ccdff;
+            border-left-color: #007bff;
+        }
+        
+        .log-entry.success {
+            color: #7cff7c;
+            border-left-color: #28a745;
+        }
+        
+        .log-entry.error {
+            color: #ff7c7c;
+            border-left-color: #dc3545;
+        }
+        
+        .log-timestamp {
+            color: #888;
+            margin-right: 10px;
+        }
+        
+        .output-container {
+            position: relative;
+        }
+        
+        .toggle-logs {
+            position: absolute;
+            right: 15px;
+            top: 15px;
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .process-log.hidden {
+            display: none;
         }
     </style>
 </head>
@@ -66,6 +204,13 @@
             <button id="searchBtn" onclick="startResearch()">Research</button>
         </div>
 
+        <div class="process-steps">
+            <div class="step" id="step-search">1. Search</div>
+            <div class="step" id="step-analyze">2. Analyze</div>
+            <div class="step" id="step-compose">3. Compose</div>
+            <div class="step" id="step-factcheck">4. Fact Check</div>
+        </div>
+
         <div id="status" class="status"></div>
         <div id="output" class="output-section"></div>
     </div>
@@ -75,27 +220,100 @@
         const queryInput = document.getElementById('query');
         const statusDiv = document.getElementById('status');
         const outputDiv = document.getElementById('output');
-
         let composingDiv = null;
+
+        // Add new variables for logging
+        const logs = {
+            search: [],
+            analyze: [],
+            compose: [],
+            factcheck: []
+        };
+
+        function addLog(phase, message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            logs[phase].push({
+                timestamp,
+                message,
+                type
+            });
+            updateLogs(phase);
+        }
+
+        function updateLogs(phase) {
+            const logContainer = document.getElementById(`${phase}-logs`);
+            if (logContainer) {
+                logContainer.innerHTML = logs[phase].map(log => `
+                    <div class="log-entry ${log.type}">
+                        <span class="log-timestamp">[${log.timestamp}]</span>
+                        ${log.message}
+                    </div>
+                `).join('');
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+        }
+
+        function toggleLogs(phase) {
+            const logContainer = document.getElementById(`${phase}-logs`);
+            logContainer.classList.toggle('hidden');
+            const button = document.querySelector(`#${phase}-container .toggle-logs`);
+            button.textContent = logContainer.classList.contains('hidden') ? 'Show Logs' : 'Hide Logs';
+        }
+
+        function updateStepStatus(step, status) {
+            const steps = ['search', 'analyze', 'compose', 'factcheck'];
+            const stepElement = document.getElementById(`step-${step}`);
+            
+            steps.forEach(s => {
+                const el = document.getElementById(`step-${s}`);
+                el.className = 'step';
+                if (s === step) {
+                    el.className = `step ${status}`;
+                } else if (steps.indexOf(s) < steps.indexOf(step)) {
+                    el.className = 'step completed';
+                }
+            });
+        }
 
         async function startResearch() {
             const query = queryInput.value.trim();
             if (!query) return;
 
-            // Disable input during research
+            // Reset UI
             searchBtn.disabled = true;
             queryInput.disabled = true;
             outputDiv.innerHTML = '';
-            statusDiv.textContent = 'Starting research...';
+            statusDiv.innerHTML = 'Starting research...';
+            composingDiv = null;
+            
+            // Reset steps
+            ['search', 'analyze', 'compose', 'factcheck'].forEach(step => {
+                document.getElementById(`step-${step}`).className = 'step';
+            });
 
             try {
+                // First check if server is available
+                try {
+                    const healthCheck = await fetch('http://localhost:3001/health');
+                    if (!healthCheck.ok) {
+                        throw new Error('Server health check failed');
+                    }
+                } catch (error) {
+                    throw new Error('Cannot connect to server. Please ensure the server is running.');
+                }
+
                 const response = await fetch('http://localhost:3001/automode', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Accept': 'text/event-stream'
                     },
                     body: JSON.stringify({ query })
                 });
+
+                if (!response.ok) {
+                    throw new Error(`Server responded with status ${response.status}: ${response.statusText}`);
+                }
 
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
@@ -118,48 +336,128 @@
                 console.error('Error:', error);
                 outputDiv.innerHTML += `
                     <div class="error">
-                        An error occurred: ${error.message}
+                        <strong>Connection Error:</strong><br>
+                        ${error.message}<br><br>
+                        Please ensure that:
+                        <ul>
+                            <li>The server is running on port 3001</li>
+                            <li>You have executed 'npm run dev' in the terminal</li>
+                            <li>Your .env file is properly configured</li>
+                        </ul>
                     </div>
                 `;
             } finally {
-                // Re-enable input
                 searchBtn.disabled = false;
                 queryInput.disabled = false;
-                statusDiv.textContent = 'Research complete';
+                statusDiv.innerHTML = 'Research complete';
             }
         }
 
         function updateOutput(data) {
+            // Add data validation
+            if (!data || typeof data !== 'object') {
+                console.error('Invalid data received:', data);
+                return;
+            }
+
             if (data.type === 'status') {
-                statusDiv.textContent = data.data;
+                statusDiv.innerHTML = `${data.data}<div class="typing-indicator"><span></span><span></span><span></span></div>`;
+                
+                const stepMap = {
+                    'Searching for information...': 'search',
+                    'Analyzing results...': 'analyze',
+                    'Composing article...': 'compose',
+                    'Fact checking...': 'factcheck'
+                };
+                
+                const currentStep = stepMap[data.data];
+                if (currentStep) {
+                    updateStepStatus(currentStep, 'active');
+                    addLog(currentStep, `Started ${currentStep} phase`, 'info');
+                }
             } else if (data.type === 'error') {
                 outputDiv.innerHTML += `
                     <div class="error">
-                        Error: ${data.error.message}
+                        Error: ${data.error.message || JSON.stringify(data.error)}
                     </div>
                 `;
+                addLog(data.error.phase || 'general', `Error: ${data.error.message || JSON.stringify(data.error)}`, 'error');
             } else if (data.type === 'composing') {
-                // Handle streaming composition
                 if (!composingDiv) {
                     outputDiv.innerHTML += `
-                        <h2>Article</h2>
-                        <div id="composing-content"></div>
+                        <div id="compose-container" class="output-container">
+                            <h2>Generated Article</h2>
+                            <button class="toggle-logs" onclick="toggleLogs('compose')">Show Logs</button>
+                            <div id="compose-logs" class="process-log hidden"></div>
+                            <div id="composing-content" class="composing-content"></div>
+                        </div>
                     `;
                     composingDiv = document.getElementById('composing-content');
+                    addLog('compose', 'Starting article generation', 'info');
                 }
-                composingDiv.innerHTML += formatContent(data.data);
+                // Ensure data.data is a string
+                const content = typeof data.data === 'string' ? data.data : JSON.stringify(data.data);
+                composingDiv.innerHTML += formatContent(content);
+                addLog('compose', 'Generated new content chunk', 'info');
                 composingDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            } else if (data.type !== 'article') { // Skip full article since we streamed it
+            } else if (data.type === 'search') {
                 outputDiv.innerHTML += `
-                    <h2>${data.type.charAt(0).toUpperCase() + data.type.slice(1)}</h2>
-                    <div>${formatContent(data.data)}</div>
+                    <div id="search-container" class="output-container">
+                        <h2>Search Results</h2>
+                        <button class="toggle-logs" onclick="toggleLogs('search')">Show Logs</button>
+                        <div id="search-logs" class="process-log hidden"></div>
+                        <div class="search-content">${formatContent(JSON.stringify(data.data, null, 2))}</div>
+                    </div>
                 `;
+                addLog('search', 'Search completed successfully', 'success');
+                updateStepStatus('search', 'completed');
+            } else if (data.type === 'analysis') {
+                outputDiv.innerHTML += `
+                    <div id="analyze-container" class="output-container">
+                        <h2>Analysis</h2>
+                        <button class="toggle-logs" onclick="toggleLogs('analyze')">Show Logs</button>
+                        <div id="analyze-logs" class="process-log hidden"></div>
+                        <div class="analysis-content">${formatContent(data.data)}</div>
+                    </div>
+                `;
+                addLog('analyze', 'Analysis completed successfully', 'success');
+                updateStepStatus('analyze', 'completed');
+            } else if (data.type === 'factCheck') {
+                outputDiv.innerHTML += `
+                    <div id="factcheck-container" class="output-container">
+                        <h2>Fact Check Results</h2>
+                        <button class="toggle-logs" onclick="toggleLogs('factcheck')">Show Logs</button>
+                        <div id="factcheck-logs" class="process-log hidden"></div>
+                        <div class="factcheck-content">${formatContent(data.data)}</div>
+                    </div>
+                `;
+                addLog('factcheck', 'Fact checking completed successfully', 'success');
+                updateStepStatus('factcheck', 'completed');
             }
             outputDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
         }
 
         function formatContent(content) {
-            return content.replace(/\n/g, '<br>');
+            if (typeof content !== 'string') {
+                // If content is an object, try to stringify it
+                if (typeof content === 'object') {
+                    try {
+                        content = JSON.stringify(content, null, 2);
+                    } catch (e) {
+                        console.error('Error stringifying content:', e);
+                        return String(content);
+                    }
+                } else {
+                    // Convert to string for other types
+                    content = String(content);
+                }
+            }
+
+            return content
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/\n/g, '<br>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>');
         }
     </script>
 </body>

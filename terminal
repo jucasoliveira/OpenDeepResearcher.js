@@ -3,3 +3,9 @@ cd automode-research-agent
 npm init -y
 mkdir -p src public 
 npm install langchain @langchain/openai fastify @fastify/cors dotenv cheerio axios 
+
+# Install dependencies if not already done
+npm install
+
+# Start the server
+npm run dev 
