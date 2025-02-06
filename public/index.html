@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automode Research Agent</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+        #query {
+            flex-grow: 1;
+            padding: 10px;
+            font-size: 16px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: #ccc;
+        }
+        .output-section {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+        .status {
+            color: #666;
+            font-style: italic;
+        }
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Automode Research Agent</h1>
+        
+        <div class="input-group">
+            <input type="text" id="query" placeholder="Enter your research query" 
+                   onkeypress="if(event.key === 'Enter') startResearch()">
+            <button id="searchBtn" onclick="startResearch()">Research</button>
+        </div>
+
+        <div id="status" class="status"></div>
+        <div id="output" class="output-section"></div>
+    </div>
+
+    <script>
+        const searchBtn = document.getElementById('searchBtn');
+        const queryInput = document.getElementById('query');
+        const statusDiv = document.getElementById('status');
+        const outputDiv = document.getElementById('output');
+
+        let composingDiv = null;
+
+        async function startResearch() {
+            const query = queryInput.value.trim();
+            if (!query) return;
+
+            // Disable input during research
+            searchBtn.disabled = true;
+            queryInput.disabled = true;
+            outputDiv.innerHTML = '';
+            statusDiv.textContent = 'Starting research...';
+
+            try {
+                const response = await fetch('http://localhost:3001/automode', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ query })
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const events = chunk.split('\n\n');
+
+                    for (const event of events) {
+                        if (event.startsWith('data: ')) {
+                            const data = JSON.parse(event.slice(6));
+                            updateOutput(data);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                outputDiv.innerHTML += `
+                    <div class="error">
+                        An error occurred: ${error.message}
+                    </div>
+                `;
+            } finally {
+                // Re-enable input
+                searchBtn.disabled = false;
+                queryInput.disabled = false;
+                statusDiv.textContent = 'Research complete';
+            }
+        }
+
+        function updateOutput(data) {
+            if (data.type === 'status') {
+                statusDiv.textContent = data.data;
+            } else if (data.type === 'error') {
+                outputDiv.innerHTML += `
+                    <div class="error">
+                        Error: ${data.error.message}
+                    </div>
+                `;
+            } else if (data.type === 'composing') {
+                // Handle streaming composition
+                if (!composingDiv) {
+                    outputDiv.innerHTML += `
+                        <h2>Article</h2>
+                        <div id="composing-content"></div>
+                    `;
+                    composingDiv = document.getElementById('composing-content');
+                }
+                composingDiv.innerHTML += formatContent(data.data);
+                composingDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            } else if (data.type !== 'article') { // Skip full article since we streamed it
+                outputDiv.innerHTML += `
+                    <h2>${data.type.charAt(0).toUpperCase() + data.type.slice(1)}</h2>
+                    <div>${formatContent(data.data)}</div>
+                `;
+            }
+            outputDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+
+        function formatContent(content) {
+            return content.replace(/\n/g, '<br>');
+        }
+    </script>
+</body>
+</html> 
